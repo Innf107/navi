@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Vega.Types (
     typecheck,
 ) where
@@ -6,22 +8,20 @@ import Vega.Prelude
 
 import Vega.Syntax
 
-import Vega.Delay (Delay, delay, force)
+import Vega.Cached (cached, force)
 
 data TypeError
     = ApplicationOfNonPi TypeValue
+    | UnableToInferLambda
 
 newtype TypeM a
     = MkTypeM (ExceptT TypeError IO a)
     deriving (Functor, Applicative, Monad, MonadIO)
 
+type TypeEnv = TypeEnvM TypeM
+
 typeError :: TypeError -> TypeM a
 typeError error = MkTypeM (throwError error)
-
-data TypeEnv = TypeEnv
-    { varTypes :: Map Name TypeValue
-    , varValues :: Map Name (Delay TypeM Value)
-    }
 
 bind :: Name -> TypeValue -> TypeEnv -> TypeEnv
 bind name typeValue env =
@@ -44,9 +44,19 @@ infer env = \case
                 resultType <- eval updatedEnv body
                 pure (App funExpr argExpr, resultType)
             funType -> typeError (ApplicationOfNonPi funType)
-    Lambda name body -> undefined
-    Let name maybeType body -> undefined
-    PiLit name typeExpr body -> undefined
+    Lambda _ _ -> typeError (UnableToInferLambda)
+    Sequence statements -> undefined
+    PiLit name typeExpr body -> do
+        typeExpr <- check env Type typeExpr
+        typeValue <- eval env typeExpr
+
+        let updatedEnv = case name of
+                -- If there is no name in the source syntax, we don't need to bind anything.
+                -- This might change if we ever switch to DeBruijn indices.
+                Nothing -> env
+                Just name -> bind name typeValue env
+
+        undefined
     -- Yes Type : Type. I honestly couldn't care less about logical consistency
     TypeLit -> pure (TypeLit, Type)
 
@@ -72,12 +82,14 @@ eval env = \case
             Nothing -> undefined
             Just delayed -> force delayed
     App funExpr argExpr -> undefined
+    _ -> undefined
 
 typecheck :: Program Parsed -> TypeM (Program Typed)
 typecheck Program{declarations} = do
     let initialEnv =
             TypeEnv
                 { varTypes = mempty
+                , varValues = mempty
                 }
 
     (_newEnv, typedDecls) <- mapAccumRM (\env decl -> checkDecl env decl) initialEnv declarations

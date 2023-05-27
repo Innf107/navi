@@ -16,6 +16,9 @@ dependencies:
 - base >= 4.7 && < 5
 - relude
 - text
+- mtl
+# required by happy
+- array
 
 ghc-options:
 - -Wall
@@ -36,7 +39,7 @@ library:
   source-dirs: src
 
 executables:
-  vega-exe:
+  vega:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -67,3 +70,4 @@ default-extensions:
   - LambdaCase
   - OverloadedRecordDot
   - OverloadedStrings
+  - StrictData

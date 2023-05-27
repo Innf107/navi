@@ -25,7 +25,9 @@ source-repository head
 
 library
   exposed-modules:
-      Vega.Delay
+      Vega.Cached
+      Vega.Lexer
+      Vega.Parser
       Vega.Prelude
       Vega.Syntax
       Vega.Types
@@ -41,14 +43,17 @@ library
       LambdaCase
       OverloadedRecordDot
       OverloadedStrings
+      StrictData
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns
   build-depends:
-      base >=4.7 && <5
+      array
+    , base >=4.7 && <5
+    , mtl
     , relude
     , text
   default-language: GHC2021
 
-executable vega-exe
+executable vega
   main-is: Main.hs
   other-modules:
       Paths_vega
@@ -62,9 +67,12 @@ executable vega-exe
       LambdaCase
       OverloadedRecordDot
       OverloadedStrings
+      StrictData
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      array
+    , base >=4.7 && <5
+    , mtl
     , relude
     , text
     , vega
@@ -85,9 +93,12 @@ test-suite vega-test
       LambdaCase
       OverloadedRecordDot
       OverloadedStrings
+      StrictData
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      array
+    , base >=4.7 && <5
+    , mtl
     , relude
     , text
     , vega
