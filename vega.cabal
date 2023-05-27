@@ -1,0 +1,94 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           vega
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/Innf107/vega#readme>
+homepage:       https://github.com/Innf107/vega#readme
+bug-reports:    https://github.com/Innf107/vega/issues
+author:         Finn Schneider
+maintainer:     mail@prophetlabs.de
+copyright:      2023 Finn Schneider
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/Innf107/vega
+
+library
+  exposed-modules:
+      Vega.Delay
+      Vega.Prelude
+      Vega.Syntax
+      Vega.Types
+  other-modules:
+      Paths_vega
+  hs-source-dirs:
+      src
+  default-extensions:
+      NoImplicitPrelude
+      DataKinds
+      TypeFamilies
+      BlockArguments
+      LambdaCase
+      OverloadedRecordDot
+      OverloadedStrings
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns
+  build-depends:
+      base >=4.7 && <5
+    , relude
+    , text
+  default-language: GHC2021
+
+executable vega-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_vega
+  hs-source-dirs:
+      app
+  default-extensions:
+      NoImplicitPrelude
+      DataKinds
+      TypeFamilies
+      BlockArguments
+      LambdaCase
+      OverloadedRecordDot
+      OverloadedStrings
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , relude
+    , text
+    , vega
+  default-language: GHC2021
+
+test-suite vega-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_vega
+  hs-source-dirs:
+      test
+  default-extensions:
+      NoImplicitPrelude
+      DataKinds
+      TypeFamilies
+      BlockArguments
+      LambdaCase
+      OverloadedRecordDot
+      OverloadedStrings
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , relude
+    , text
+    , vega
+  default-language: GHC2021

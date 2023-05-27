@@ -1,0 +1,69 @@
+name:                vega
+version:             0.1.0.0
+github:              "Innf107/vega"
+license:             BSD3
+author:              "Finn Schneider"
+maintainer:          "mail@prophetlabs.de"
+copyright:           "2023 Finn Schneider"
+
+extra-source-files:
+- README.md
+- CHANGELOG.md
+
+description:         Please see the README on GitHub at <https://github.com/Innf107/vega#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- relude
+- text
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
+- -Wno-unticked-promoted-constructors
+- -Wno-name-shadowing
+- -Werror=incomplete-patterns
+- -Werror=incomplete-uni-patterns
+
+library:
+  source-dirs: src
+
+executables:
+  vega-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - vega
+
+tests:
+  vega-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - vega
+
+language: GHC2021
+
+default-extensions:
+  - NoImplicitPrelude
+  - DataKinds
+  - TypeFamilies
+  - BlockArguments
+  - LambdaCase
+  - OverloadedRecordDot
+  - OverloadedStrings
