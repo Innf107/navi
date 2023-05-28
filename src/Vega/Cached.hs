@@ -1,6 +1,7 @@
 module Vega.Cached (
     Cached,
     cached,
+    cachedValue,
     force,
 ) where
 
@@ -21,13 +22,19 @@ newtype Cached m a = MkCached (IORef (Either (m a) a))
 cached :: MonadIO m => m a -> m (Cached m a)
 cached action = MkCached <$> newIORef (Left action)
 
+{- | Construct an immediately forced cached value. This can be passed to functions that expect
+    a cached value without the overhead of delaying the computation
+-}
+cachedValue :: MonadIO m => a -> m (Cached m a)
+cachedValue value = MkCached <$> newIORef (Right value)
+
 {- | Force a delayed computation in Monad 'm'. Forcing will only re-evaluate the computation
     once and subsequent applications of 'force' will return the same value.
 
     This is not thread safe! Only use this if you know that either
         a) this is only ever going to run on one thread
         b) the computation is morally pure and two racing computations will
-           produce the same result 
+           produce the same result
 -}
 force :: MonadIO m => Cached m a -> m a
 force (MkCached ref) =
@@ -37,4 +44,3 @@ force (MkCached ref) =
             writeIORef ref (Right result)
             pure result
         Right value -> pure value
-

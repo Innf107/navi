@@ -7,6 +7,7 @@ import Vega.Pretty (ANSI (..), pretty)
 import Vega.Error qualified as Error
 import Vega.Lexer qualified as Lexer
 import Vega.Parser qualified as Parser
+import Vega.ToLua qualified as ToLua
 import Vega.Types qualified as Types
 
 main :: IO ()
@@ -17,18 +18,24 @@ main = do
 
     tokens <- case Lexer.run contents of
         Right tokens -> pure tokens
-        Left error -> fail (toString $ "Lexical error: " <> pretty (Error.LexError error))
-
-    putStrLn ("Tokens: " <> show tokens)
+        Left error -> do
+            putTextLn ("Lexical error: " <> pretty (Error.LexError error))
+            exitFailure
 
     program <- case Parser.runParserM (Parser.parse tokens) of
         Right program -> pure program
-        Left error -> fail (toString $ "Parse error: " <> pretty (Error.ParseError error))
+        Left error -> do
+            putTextLn ("Parse error: " <> pretty (Error.ParseError error))
+            exitFailure
 
-    putStrLn ("Program: " <> show program)
     typed <-
         Types.runTypeM (Types.typecheck program) >>= \case
             Right program -> pure program
-            Left error -> fail (toString $ "Type error: " <> pretty (Error.TypeError error))
+            Left error -> do
+                putTextLn ("Type error: " <> pretty (Error.TypeError error))
+                exitFailure
 
-    putStrLn ("Typed: " <> show typed)
+    let luaCode = ToLua.compile typed
+
+    writeFileText "test.lua" luaCode
+    pure ()

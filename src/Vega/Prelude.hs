@@ -4,10 +4,10 @@ module Vega.Prelude (
     mapAccumRM,
 ) where
 
+import Control.Monad.Except as Export
 import Relude as Export hiding (Type, force)
 import Relude qualified
 import Relude.Extra as Export
-import Control.Monad.Except as Export
 
 type HsType = Relude.Type
 

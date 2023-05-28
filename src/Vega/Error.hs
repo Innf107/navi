@@ -29,8 +29,14 @@ instance Pretty.Pretty Error where
                     )
         Parser.UnexpectedEOF -> Pretty.literal "Unexpected end of file"
     pretty (TypeError err) = case err of
+        Types.UnableToUnify actual expected ->
+            Pretty.literal "Unable to unify\n"
+            <> Pretty.literal "       expected type " <> Pretty.pretty expected <> Pretty.literal "\n"
+            <> Pretty.literal "    with actual type " <> Pretty.pretty actual
         Types.ApplicationOfNonPi value ->
             Pretty.literal "Application of non-pi value: " <> Pretty.pretty value
         Types.UnableToInferLambda ->
             Pretty.literal "Unable to infer type of lambda expression.\n"
                 <> Pretty.literal "  Please provide an explicit type signature"
+        Types.DefiningLambdaAsNonPi ty ->
+            Pretty.literal "Lambda expression is expected to have non-function type " <> Pretty.pretty ty

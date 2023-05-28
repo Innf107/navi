@@ -33,9 +33,9 @@ instance TextStyle ANSI where
     literal text = text
 
     identifier text = "\x1b[1m\STX" <> text <> "\x1b[0m\STX"
-    keyword text = "\x1b[14m\STX" <> text <> "\x1b[0m\STX"
-    operator text = "\x1b[12m\STX" <> text <> "\x1b[0m\STX"
-    paren = literal
+    keyword text = "\x1b[96m\STX" <> text <> "\x1b[0m\STX"
+    operator text = "\x1b[94m\STX" <> text <> "\x1b[0m\STX"
+    paren = operator
     error text = "\x1b[31m\STX" <> text <> "\x1b[0m\STX"
     emphasis text = "\x1b[1m\STX" <> text <> "\x1b[0m\STX"
 

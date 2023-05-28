@@ -54,8 +54,8 @@ expr_leaf :: { Expr Parsed }
 expr_leaf : ident                               { Var $1 }
           | 'λ' ident '->' expr                 { Lambda $2 $4 }
           | '{' statements '}'                  { Sequence $2 }
-          | '(' ident ':' expr ')' '->' expr    { PiLit (Just $2) $4 $7 }
-          | expr_leaf '->' expr                 { PiLit Nothing $1 $3 }
+          | '(' ident ':' expr ')' '->' expr    { Pi (Just $2) $4 $7 }
+          | expr_leaf '->' expr                 { Pi Nothing $1 $3 }
           | 'Type'                              { TypeLit }
           | '(' expr ')'                        { $2 }
 

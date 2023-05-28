@@ -93,6 +93,7 @@ runLexM text (MkLexM lexM) = do
 
 run :: Text -> Either LexError [Token]
 run source =
-    runLexM source $ fix \recurse -> lex >>= \case
-        EOF -> pure []
-        token -> (token :) <$> recurse
+    runLexM source $ fix \recurse ->
+        lex >>= \case
+            EOF -> pure []
+            token -> (token :) <$> recurse
