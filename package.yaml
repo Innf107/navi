@@ -71,3 +71,4 @@ default-extensions:
   - OverloadedRecordDot
   - OverloadedStrings
   - StrictData
+  - ImplicitParams

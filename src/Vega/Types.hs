@@ -1,7 +1,7 @@
-{-# LANGUAGE OverloadedRecordDot #-}
-
 module Vega.Types (
+    TypeError (..),
     typecheck,
+    runTypeM,
 ) where
 
 import Vega.Prelude
@@ -10,15 +10,10 @@ import Vega.Syntax
 
 import Vega.Cached (cached, force)
 
-data TypeError
-    = ApplicationOfNonPi TypeValue
-    | UnableToInferLambda
+import GHC.Show qualified as Show
 
-newtype TypeM a
-    = MkTypeM (ExceptT TypeError IO a)
-    deriving (Functor, Applicative, Monad, MonadIO)
-
-type TypeEnv = TypeEnvM TypeM
+runTypeM :: TypeM a -> IO (Either TypeError a)
+runTypeM (MkTypeM typeM) = runExceptT typeM
 
 typeError :: TypeError -> TypeM a
 typeError error = MkTypeM (throwError error)
@@ -38,7 +33,8 @@ infer env = \case
     App funExpr argExpr -> do
         (funExpr, funType) <- infer env funExpr
         case funType of
-            Pi name argType body -> do
+            Pi name argType body piEnv -> do
+                undefined
                 argExpr <- check env argType argExpr
                 let updatedEnv = bind name argType env
                 resultType <- eval updatedEnv body

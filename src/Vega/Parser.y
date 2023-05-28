@@ -74,7 +74,6 @@ statements :                          { [] }
 data ParseError 
     = ParseError [Token]
     | UnexpectedEOF
-    deriving (Show)
 
 newtype ParserM a = MkParserM (Either ParseError a) deriving (Functor, Applicative, Monad)
 

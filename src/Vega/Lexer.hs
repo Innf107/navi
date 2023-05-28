@@ -28,7 +28,6 @@ data Token
 data LexError
     = UnexpectedChar Char
     | UnexpectedEOF
-    deriving (Show)
 
 data LexState = LexState
     { underlying :: Text
