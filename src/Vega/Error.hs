@@ -40,3 +40,6 @@ instance Pretty.Pretty Error where
                 <> Pretty.literal "  Please provide an explicit type signature"
         Types.DefiningLambdaAsNonPi ty ->
             Pretty.literal "Lambda expression is expected to have non-function type " <> Pretty.pretty ty
+        Types.MoreArgumentsThanInType number ->
+            Pretty.literal "Function definition is defined with too many arguments.\n"
+            <> Pretty.literal "It has " <> Pretty.number number <> Pretty.literal " more than its type suggests"

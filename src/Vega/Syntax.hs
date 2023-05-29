@@ -19,8 +19,6 @@ import Vega.Prelude
 import Vega.Cached (Cached)
 import Vega.Pretty qualified as Pretty
 
-import Data.Text qualified as Text
-
 type Name = Text
 
 data Pass = Parsed | Typed
@@ -43,6 +41,7 @@ type TypeExpr = Expr
 
 data Decl pass
     = DeclVar Name (TypeExpr pass) (Expr pass)
+    | DeclFunction Name (TypeExpr pass) [Name] (Expr pass)
     deriving (Show)
 
 data Program pass = Program
@@ -79,6 +78,7 @@ data TypeError
     | ApplicationOfNonPi TypeValue
     | UnableToInferLambda
     | DefiningLambdaAsNonPi TypeValue
+    | MoreArgumentsThanInType Int
 
 instance Pretty.Pretty Value where
     pretty :: (?style :: style, Pretty.TextStyle style) => Value -> Pretty.Doc style
@@ -104,9 +104,9 @@ instance Pretty.Pretty Value where
                 <> Pretty.literal " "
                 <> Pretty.pretty body
         LambdaClosure name body _env ->
-            Pretty.paren "(" 
+            Pretty.paren "("
                 <> Pretty.operator "\\"
-                <> Pretty.identifier name 
+                <> Pretty.identifier name
                 <> Pretty.literal " "
                 <> Pretty.pretty body
                 <> Pretty.paren ")"
@@ -157,4 +157,26 @@ instance Pretty.Pretty (Expr pass) where
                 <> Pretty.pretty body
         TypeLit -> Pretty.keyword "Type"
 
-instance Pretty.Pretty (Statement pass)
+instance Pretty.Pretty (Statement pass) where
+    pretty = \case
+        Let name Nothing expr ->
+            Pretty.keyword "let"
+                <> Pretty.literal " "
+                <> Pretty.identifier name
+                <> Pretty.literal " "
+                <> Pretty.operator "="
+                <> Pretty.literal " "
+                <> Pretty.pretty expr
+        Let name (Just ty) expr ->
+            Pretty.keyword "let"
+                <> Pretty.literal " "
+                <> Pretty.identifier name
+                <> Pretty.literal " "
+                <> Pretty.operator ":"
+                <> Pretty.literal " "
+                <> Pretty.pretty ty
+                <> Pretty.literal " "
+                <> Pretty.operator "="
+                <> Pretty.literal " "
+                <> Pretty.pretty expr
+        RunExpr expr -> Pretty.pretty expr

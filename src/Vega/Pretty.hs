@@ -19,6 +19,7 @@ class (Monoid (Doc a)) => TextStyle a where
     paren :: (?style :: a) => Text -> Doc a
     error :: (?style :: a) => Text -> Doc a
     emphasis :: (?style :: a) => Text -> Doc a
+    number :: (?style :: a, Num number, Show number) => number -> Doc a
 
     type Doc a
 
@@ -38,5 +39,6 @@ instance TextStyle ANSI where
     paren = operator
     error text = "\x1b[31m\STX" <> text <> "\x1b[0m\STX"
     emphasis text = "\x1b[1m\STX" <> text <> "\x1b[0m\STX"
+    number num = "\x1b[1m\x1b[93m\STX" <> show num <> "\x1b[0m\STX"
 
     type Doc ANSI = Text

@@ -44,7 +44,9 @@ declarations :                       { [] }
              | decl ';' declarations { $1 : $3 }
 
 decl :: { Decl Parsed }
-decl : ident ':' expr ';' ident '=' expr { if $1 /= $5 then undefined else DeclVar $1 $3 $7 }
+decl : ident ':' expr ';' ident '=' expr                  { if $1 /= $5 then undefined else DeclVar $1 $3 $7 }
+     | ident ':' expr ';' ident ident ident_list '=' expr { if $1 /= $5 then undefined else DeclFunction $1 $3 ($6 : $7) $9 }
+
 
 expr :: { Expr Parsed }
 expr : expr expr_leaf { App $1 $2 }
@@ -68,6 +70,10 @@ statements :: { [Statement Parsed] }
 statements :                          { [] }
            | statement                { [$1] }
            | statement ';' statements { $1 : $3 }
+
+ident_list :: { [Name] }
+ident_list :                  { [] }
+           | ident ident_list { $1 : $2 }
 
 
 {

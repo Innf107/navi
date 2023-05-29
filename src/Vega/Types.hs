@@ -38,11 +38,15 @@ bindEval :: Name -> Cached TypeM Value -> EvalEnv -> EvalEnv
 bindEval name value evalEnv =
     evalEnv{varValues = insert name value evalEnv.varValues}
 
+data CheckOrInfer a where
+    Check :: TypeValue -> CheckOrInfer ()
+    Infer :: CheckOrInfer TypeValue
+
 infer :: TypeEnv -> Expr Parsed -> TypeM (Expr Typed, TypeValue)
 infer env = \case
     Var name ->
         case lookup name env.varTypes of
-            Nothing -> error "Vega.Types.infer: Variable not found during type check"
+            Nothing -> error ("Vega.Types.infer: Variable not found during type check: " <> name)
             Just ty -> pure (Var name, ty)
     App funExpr argExpr -> do
         (funExpr, funType) <- infer env funExpr
@@ -58,7 +62,9 @@ infer env = \case
                 pure (App funExpr argExpr, resultType)
             funType -> typeError (ApplicationOfNonPi funType)
     Lambda _ _ -> typeError (UnableToInferLambda)
-    Sequence statements -> undefined
+    Sequence statements -> do
+        (statements, ty) <- checkStatements Infer env statements
+        pure (Sequence statements, ty)
     Pi name typeExpr body -> do
         typeExpr <- check env Type typeExpr
         typeValue <- eval env.evalEnv typeExpr
@@ -104,6 +110,37 @@ check env expectedType expr = do
         Pi{} -> deferToInference
         TypeLit -> deferToInference
 
+checkStatements :: CheckOrInfer result -> TypeEnv -> [Statement Parsed] -> TypeM ([Statement Typed], result)
+checkStatements Infer env [RunExpr expr] = do
+    (expr, ty) <- infer env expr
+    pure ([RunExpr expr], ty)
+checkStatements Infer _env [] = pure ([], undefined) -- TODO: Return () here
+checkStatements (Check ty) _env [] = do
+    subsumes ty undefined
+    pure ([], ()) -- TODO: ()
+checkStatements checkOrInfer env (RunExpr expr : statements) = do
+    expr <- check env undefined expr -- TODO: ()
+    (statements, result) <- checkStatements checkOrInfer env statements
+    pure (RunExpr expr : statements, result)
+checkStatements checkOrInfer env (Let name maybeTypeExpr body : statements) = do
+    -- Regular let bindings are non-recursive, so we just use the ambient environment
+    (body, varType, maybeTypeExpr) <- case maybeTypeExpr of
+        Nothing -> do
+            (body, varType) <- infer env body
+            pure (body, varType, Nothing)
+        Just typeExpr -> do
+            typeExpr <- check env Type typeExpr
+            typeValue <- eval env.evalEnv typeExpr
+
+            body <- check env typeValue body
+            pure (body, typeValue, Just typeExpr)
+
+    bodyValue <- cached (eval env.evalEnv body)
+
+    let updatedEnv = bind name varType bodyValue env
+    (statements, result) <- checkStatements checkOrInfer updatedEnv statements
+    pure (Let name maybeTypeExpr body : statements, result)
+
 checkDecl :: TypeEnv -> Decl Parsed -> TypeM (TypeEnv, Decl Typed)
 checkDecl env = \case
     DeclVar name typeExpr body -> do
@@ -115,6 +152,47 @@ checkDecl env = \case
         let updatedEnv = bind name typeValue bodyValue env
 
         pure (updatedEnv, DeclVar name typeExpr body)
+    DeclFunction functionName typeExpr params body -> do
+        -- Function definitions *can* be recursive
+        typeExpr <- check env Type typeExpr
+        typeValue <- eval env.evalEnv typeExpr
+
+        (paramsWithTypes, bodyType) <- splitFunctionType typeValue params
+
+        paramsWithTypesAndValues <- forM paramsWithTypes \(name, ty) -> do 
+            value <- cachedValue (StuckVar name)
+            pure (name, ty, value)
+
+        let envWithParams = foldr (\(name, ty, value) env -> bind name ty value env) env paramsWithTypesAndValues
+
+        -- TODO: I hope not including the real value here is fine?
+        functionValue <- cachedValue (StuckVar functionName)
+        let bodyEnv = bind functionName typeValue functionValue envWithParams
+
+        body <- check bodyEnv bodyType body
+
+        let updatedEnv = bind functionName typeValue functionValue env
+
+        pure (updatedEnv, DeclFunction functionName typeExpr params body)
+
+
+splitFunctionType :: TypeValue -> [Name] -> TypeM ([(Name, TypeValue)], TypeValue)
+splitFunctionType ty [] = pure ([], ty)
+splitFunctionType (PiClosure mname domain codomain piEnv) (param : params) = do
+    codomain <- evalClosureAbstractMaybe mname codomain piEnv
+
+    (rest, result) <- splitFunctionType codomain params
+    pure ((param, domain) : rest, result)
+splitFunctionType _ty params = typeError (MoreArgumentsThanInType (length params))
+
+evalClosureAbstractMaybe :: Maybe Name -> Expr Typed -> EvalEnv -> TypeM Value
+evalClosureAbstractMaybe mname expr env = do
+    env <- case mname of
+        Nothing -> pure env
+        Just name -> do
+            value <- cachedValue (StuckVar name)
+            pure $ bindEval name value env
+    eval env expr
 
 eval :: EvalEnv -> Expr Typed -> TypeM Value
 eval env = \case
@@ -137,8 +215,10 @@ eval env = \case
     Pi maybeName domain codomain -> do
         domain <- eval env domain
         pure (PiClosure maybeName domain codomain env)
-    Lambda name body -> undefined
-    Sequence statements -> undefined
+    Lambda name body ->
+        pure $ LambdaClosure name body env
+    Sequence statements -> do
+        undefined
 
 typecheck :: Program Parsed -> TypeM (Program Typed)
 typecheck Program{declarations} = do
@@ -157,7 +237,7 @@ typecheck Program{declarations} = do
             { declarations = typedDecls
             }
 
--- Assert that one type should be a subtype of another.
+-- | Assert that one type should be a subtype of another.
 subsumes :: TypeValue -> TypeValue -> TypeM ()
 subsumes Type val = case val of
     Type -> pure ()
@@ -193,5 +273,11 @@ subsumes val1@(PiClosure name1 domain1 codomain1 env1) val = case val of
     _ -> typeError (UnableToUnify val1 val)
 subsumes val1@(LambdaClosure name1 body1 env1) val = case val of
     LambdaClosure name2 body2 env2 -> do
-        undefined
+        -- TODO: We should not arbitrarily pick one name here (see PiClosure above)
+        skolem <- cachedValue (StuckVar name1)
+
+        bodyValue1 <- eval (bindEval name1 skolem env1) body1
+        bodyValue2 <- eval (bindEval name2 skolem env2) body2
+
+        subsumes bodyValue1 bodyValue2
     _ -> typeError (UnableToUnify val1 val)
