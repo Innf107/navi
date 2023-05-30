@@ -65,6 +65,7 @@ lex =
             advance
             peekChar >>= \case
                 Just '>' -> advance >> pure ARROW
+                Just '-' -> advance >> lexLineComment
                 Just char -> lexError (UnexpectedChar char)
                 Nothing -> lexError UnexpectedEOF
         Just char
@@ -72,12 +73,19 @@ lex =
             | Char.isAlpha char -> advance >> lexIdent [char]
             | otherwise -> lexError (UnexpectedChar char)
 
+lexLineComment :: LexM Token
+lexLineComment =
+    peekChar >>= \case
+        Nothing -> pure EOF
+        Just '\n' -> advance >> lex
+        Just _ -> advance >> lexLineComment
+
 lexIdent :: [Char] -> LexM Token
 lexIdent chars =
     peekChar >>= \case
         Nothing -> pure builtIdent
         Just char
-            | Char.isAlpha char -> advance >> lexIdent (char : chars)
+            | Char.isAlphaNum char -> advance >> lexIdent (char : chars)
             | otherwise -> pure builtIdent
   where
     builtIdent =
