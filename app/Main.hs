@@ -16,7 +16,7 @@ main = do
 
     contents <- decodeUtf8 <$> readFileBS "test.vega"
 
-    tokens <- case Lexer.run contents of
+    tokens <- case Lexer.run "test.vega" contents of
         Right tokens -> pure tokens
         Left error -> do
             putTextLn ("Lexical error: " <> pretty (Error.LexError error))
@@ -32,7 +32,7 @@ main = do
         Types.runTypeM (Types.typecheck program) >>= \case
             Right program -> pure program
             Left error -> do
-                putTextLn ("Type error: " <> pretty (Error.TypeError error))
+                putTextLn (pretty (Error.TypeError error))
                 exitFailure
 
     let luaCode = ToLua.compile typed

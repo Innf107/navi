@@ -7,7 +7,8 @@ import Prelude hiding (lex)
 import Relude (Text)
 
 import Vega.Syntax
-import Vega.Lexer (Token(..))
+import Vega.Lexer (Token(..), TokenClass(..))
+import Vega.Loc (Loc(..), merge)
 
 import Control.Monad.Except (ExceptT, throwError, runExceptT)
 
@@ -19,21 +20,24 @@ import Control.Monad.Except (ExceptT, throwError, runExceptT)
 
 %monad { ParserM }
 
-%token ident            { IDENT $$ }
-%token 'λ'              { LAMBDA }
-%token 'let'            { LET }
-%token 'Type'           { TYPE }
-%token ':'              { COLON }
-%token '->'             { ARROW }
-%token '='              { EQUALS }
-%token '('              { LPAREN }
-%token ')'              { RPAREN }
-%token '{'              { LBRACE }
-%token '}'              { RBRACE }
-%token ';'              { SEMI }
-%token eof              { EOF }
+%token identLoc         { (\case { Token (IDENT name) loc -> Just (name, loc); _ -> Nothing } -> Just $$) }
+%token 'λ'              { Token LAMBDA $$ }
+%token 'let'            { Token LET $$ }
+%token 'Type'           { Token TYPE $$ }
+%token ':'              { Token COLON $$ }
+%token '->'             { Token ARROW $$ }
+%token '='              { Token EQUALS $$ }
+%token '('              { Token LPAREN $$ }
+%token ')'              { Token RPAREN $$ }
+%token '{'              { Token LBRACE $$ }
+%token '}'              { Token RBRACE $$ }
+%token ';'              { Token SEMI $$ }
+%token eof              { Token EOF $$ }
 
 %%
+
+ident :: { Name }
+ident : identLoc { fst $1 }
 
 program :: { Program Parsed }
 program : declarations { Program { declarations = $1 } }
@@ -44,26 +48,26 @@ declarations :                       { [] }
              | decl ';' declarations { $1 : $3 }
 
 decl :: { Decl Parsed }
-decl : ident ':' expr ';' ident '=' expr                  { if $1 /= $5 then undefined else DeclVar $1 $3 $7 }
-     | ident ':' expr ';' ident ident ident_list '=' expr { if $1 /= $5 then undefined else DeclFunction $1 $3 ($6 : $7) $9 }
+decl : identLoc ':' expr ';' ident '=' expr                  { if fst $1 /= $5 then undefined else DeclVar (merge (snd $1) $7) (fst $1) $3 $7 }
+     | identLoc ':' expr ';' ident ident ident_list '=' expr { if fst $1 /= $5 then undefined else DeclFunction (merge (snd $1) $9) (fst $1) $3 ($6 : $7) $9 }
 
 
 expr :: { Expr Parsed }
-expr : expr expr_leaf { App $1 $2 }
+expr : expr expr_leaf { App (merge $1 $2) $1 $2 }
      | expr_leaf      { $1 }
 
 expr_leaf :: { Expr Parsed }
-expr_leaf : ident                               { Var $1 }
-          | 'λ' ident '->' expr                 { Lambda $2 $4 }
-          | '{' statements '}'                  { Sequence $2 }
-          | '(' ident ':' expr ')' '->' expr    { Pi (Just $2) $4 $7 }
-          | expr_leaf '->' expr                 { Pi Nothing $1 $3 }
-          | 'Type'                              { TypeLit }
+expr_leaf : identLoc                            { Var (snd $1) (fst $1) }
+          | 'λ' ident '->' expr                 { Lambda (merge $1 $4) $2 $4 }
+          | '{' statements '}'                  { Sequence (merge $1 $3) $2 }
+          | '(' ident ':' expr ')' '->' expr    { Pi (merge $1 $7) (Just $2) $4 $7 }
+          | expr_leaf '->' expr                 { Pi (merge $1 $3) Nothing $1 $3 }
+          | 'Type'                              { TypeLit $1 }
           | '(' expr ')'                        { $2 }
 
 statement :: { Statement Parsed }
-statement : 'let' ident '=' expr            { Let $2 Nothing $4 }
-          | 'let' ident ':' expr '=' expr   { Let $2 (Just $4) $6 }
+statement : 'let' ident '=' expr            { Let (merge $1 $4) $2 Nothing $4 }
+          | 'let' ident ':' expr '=' expr   { Let (merge $1 $6) $2 (Just $4) $6 }
           | expr { RunExpr $1 }
 
 statements :: { [Statement Parsed] }

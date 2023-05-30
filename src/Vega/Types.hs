@@ -44,11 +44,11 @@ data CheckOrInfer a where
 
 infer :: TypeEnv -> Expr Parsed -> TypeM (Expr Typed, TypeValue)
 infer env = \case
-    Var name ->
+    Var loc name ->
         case lookup name env.varTypes of
             Nothing -> error ("Vega.Types.infer: Variable not found during type check: " <> name)
-            Just ty -> pure (Var name, ty)
-    App funExpr argExpr -> do
+            Just ty -> pure (Var loc name, ty)
+    App loc funExpr argExpr -> do
         (funExpr, funType) <- infer env funExpr
         case funType of
             PiClosure name argType body piEnv -> do
@@ -59,13 +59,13 @@ infer env = \case
                         Just name -> bindEval name argValue piEnv
                         Nothing -> env.evalEnv
                 resultType <- eval updatedEnv body
-                pure (App funExpr argExpr, resultType)
-            funType -> typeError (ApplicationOfNonPi funType)
-    Lambda _ _ -> typeError (UnableToInferLambda)
-    Sequence statements -> do
-        (statements, ty) <- checkStatements Infer env statements
-        pure (Sequence statements, ty)
-    Pi name typeExpr body -> do
+                pure (App loc funExpr argExpr, resultType)
+            funType -> typeError (ApplicationOfNonPi loc funType)
+    Lambda loc _ _ -> typeError (UnableToInferLambda loc)
+    Sequence loc statements -> do
+        (statements, ty) <- checkStatements Infer loc env statements
+        pure (Sequence loc statements, ty)
+    Pi loc name typeExpr body -> do
         typeExpr <- check env Type typeExpr
         typeValue <- eval env.evalEnv typeExpr
 
@@ -78,20 +78,20 @@ infer env = \case
                 pure $ bind name typeValue varValue env
 
         body <- check updatedEnv Type body
-        pure (Pi name typeExpr body, Type)
+        pure (Pi loc name typeExpr body, Type)
     -- Yes Type : Type. I honestly couldn't care less about logical consistency
-    TypeLit -> pure (TypeLit, Type)
+    TypeLit loc -> pure (TypeLit loc, Type)
 
 check :: TypeEnv -> TypeValue -> Expr Parsed -> TypeM (Expr Typed)
 check env expectedType expr = do
     let deferToInference = do
             (expr, ty) <- infer env expr
-            subsumes ty expectedType
+            subsumes (getLoc expr) ty expectedType
             pure expr
     case expr of
-        Var _ -> deferToInference
-        App _ _ -> deferToInference
-        Lambda name body -> do
+        Var _ _ -> deferToInference
+        App _ _ _ -> deferToInference
+        Lambda loc name body -> do
             case expectedType of
                 PiClosure piName domain codomain piEnv -> do
                     varValue <- cachedValue (StuckVar name)
@@ -104,25 +104,25 @@ check env expectedType expr = do
                         Nothing -> eval piEnv codomain
 
                     body <- check updatedEnv codomain body
-                    pure (Lambda name body)
-                _ -> typeError (DefiningLambdaAsNonPi expectedType)
-        Sequence _ -> undefined
+                    pure (Lambda loc name body)
+                _ -> typeError (DefiningLambdaAsNonPi loc expectedType)
+        Sequence _ _ -> undefined
         Pi{} -> deferToInference
-        TypeLit -> deferToInference
+        TypeLit _ -> deferToInference
 
-checkStatements :: CheckOrInfer result -> TypeEnv -> [Statement Parsed] -> TypeM ([Statement Typed], result)
-checkStatements Infer env [RunExpr expr] = do
+checkStatements :: CheckOrInfer result -> Loc -> TypeEnv -> [Statement Parsed] -> TypeM ([Statement Typed], result)
+checkStatements Infer _seqLoc env [RunExpr expr] = do
     (expr, ty) <- infer env expr
     pure ([RunExpr expr], ty)
-checkStatements Infer _env [] = pure ([], undefined) -- TODO: Return () here
-checkStatements (Check ty) _env [] = do
-    subsumes ty undefined
+checkStatements Infer _seqLoc _env [] = pure ([], undefined) -- TODO: Return () here
+checkStatements (Check ty) seqLoc _env [] = do
+    subsumes seqLoc ty undefined
     pure ([], ()) -- TODO: ()
-checkStatements checkOrInfer env (RunExpr expr : statements) = do
+checkStatements checkOrInfer seqLoc env (RunExpr expr : statements) = do
     expr <- check env undefined expr -- TODO: ()
-    (statements, result) <- checkStatements checkOrInfer env statements
+    (statements, result) <- checkStatements checkOrInfer seqLoc env statements
     pure (RunExpr expr : statements, result)
-checkStatements checkOrInfer env (Let name maybeTypeExpr body : statements) = do
+checkStatements checkOrInfer seqLoc env (Let loc name maybeTypeExpr body : statements) = do
     -- Regular let bindings are non-recursive, so we just use the ambient environment
     (body, varType, maybeTypeExpr) <- case maybeTypeExpr of
         Nothing -> do
@@ -138,12 +138,12 @@ checkStatements checkOrInfer env (Let name maybeTypeExpr body : statements) = do
     bodyValue <- cached (eval env.evalEnv body)
 
     let updatedEnv = bind name varType bodyValue env
-    (statements, result) <- checkStatements checkOrInfer updatedEnv statements
-    pure (Let name maybeTypeExpr body : statements, result)
+    (statements, result) <- checkStatements checkOrInfer seqLoc updatedEnv statements
+    pure (Let loc name maybeTypeExpr body : statements, result)
 
 checkDecl :: TypeEnv -> Decl Parsed -> TypeM (TypeEnv, Decl Typed)
 checkDecl env = \case
-    DeclVar name typeExpr body -> do
+    DeclVar loc name typeExpr body -> do
         typeExpr <- check env Type typeExpr
         typeValue <- eval env.evalEnv typeExpr
         body <- check env typeValue body
@@ -151,13 +151,13 @@ checkDecl env = \case
         bodyValue <- cached (eval env.evalEnv body)
         let updatedEnv = bind name typeValue bodyValue env
 
-        pure (updatedEnv, DeclVar name typeExpr body)
-    DeclFunction functionName typeExpr params body -> do
+        pure (updatedEnv, DeclVar loc name typeExpr body)
+    DeclFunction loc functionName typeExpr params body -> do
         -- Function definitions *can* be recursive
         typeExpr <- check env Type typeExpr
         typeValue <- eval env.evalEnv typeExpr
 
-        (paramsWithTypes, bodyType) <- splitFunctionType typeValue params
+        (paramsWithTypes, bodyType) <- splitFunctionType loc typeValue params
 
         paramsWithTypesAndValues <- forM paramsWithTypes \(name, ty) -> do 
             value <- cachedValue (StuckVar name)
@@ -173,17 +173,17 @@ checkDecl env = \case
 
         let updatedEnv = bind functionName typeValue functionValue env
 
-        pure (updatedEnv, DeclFunction functionName typeExpr params body)
+        pure (updatedEnv, DeclFunction loc functionName typeExpr params body)
 
 
-splitFunctionType :: TypeValue -> [Name] -> TypeM ([(Name, TypeValue)], TypeValue)
-splitFunctionType ty [] = pure ([], ty)
-splitFunctionType (PiClosure mname domain codomain piEnv) (param : params) = do
+splitFunctionType :: Loc -> TypeValue -> [Name] -> TypeM ([(Name, TypeValue)], TypeValue)
+splitFunctionType _loc ty [] = pure ([], ty)
+splitFunctionType loc (PiClosure mname domain codomain piEnv) (param : params) = do
     codomain <- evalClosureAbstractMaybe mname codomain piEnv
 
-    (rest, result) <- splitFunctionType codomain params
+    (rest, result) <- splitFunctionType loc codomain params
     pure ((param, domain) : rest, result)
-splitFunctionType _ty params = typeError (MoreArgumentsThanInType (length params))
+splitFunctionType loc _ty params = typeError (MoreArgumentsThanInType loc (length params))
 
 evalClosureAbstractMaybe :: Maybe Name -> Expr Typed -> EvalEnv -> TypeM Value
 evalClosureAbstractMaybe mname expr env = do
@@ -196,11 +196,11 @@ evalClosureAbstractMaybe mname expr env = do
 
 eval :: EvalEnv -> Expr Typed -> TypeM Value
 eval env = \case
-    Var name ->
+    Var _ name ->
         case lookup name env.varValues of
             Nothing -> pure $ StuckVar name
             Just delayed -> force delayed
-    App funExpr argExpr -> do
+    App _ funExpr argExpr -> do
         funValue <- eval env funExpr
 
         argValue <- cached $ eval env argExpr
@@ -211,13 +211,13 @@ eval env = \case
                 eval (bindEval name argValue env) body
             PiClosure{} -> error "Tried evaluating unsound application of non-function value"
             Type -> error "Tried evaluating unsound application of non-function value"
-    TypeLit -> pure Type
-    Pi maybeName domain codomain -> do
+    (TypeLit _) -> pure Type
+    Pi _ maybeName domain codomain -> do
         domain <- eval env domain
         pure (PiClosure maybeName domain codomain env)
-    Lambda name body ->
+    Lambda _ name body ->
         pure $ LambdaClosure name body env
-    Sequence statements -> do
+    Sequence _ statements -> do
         undefined
 
 typecheck :: Program Parsed -> TypeM (Program Typed)
@@ -238,23 +238,23 @@ typecheck Program{declarations} = do
             }
 
 -- | Assert that one type should be a subtype of another.
-subsumes :: TypeValue -> TypeValue -> TypeM ()
-subsumes Type val = case val of
+subsumes :: Loc -> TypeValue -> TypeValue -> TypeM ()
+subsumes loc Type val = case val of
     Type -> pure ()
-    _ -> typeError (UnableToUnify Type val)
-subsumes (StuckVar name1) val = case val of
+    _ -> typeError (UnableToUnify loc Type val)
+subsumes loc (StuckVar name1) val = case val of
     -- TODO: Fuck, this is completely unsound. I either need a renamer or DeBruijn indices
     (StuckVar name2) | name1 == name2 -> pure ()
-    _ -> typeError (UnableToUnify (StuckVar name1) val)
-subsumes (StuckApp fun1 arg1) val = case val of
+    _ -> typeError (UnableToUnify loc (StuckVar name1) val)
+subsumes loc (StuckApp fun1 arg1) val = case val of
     StuckApp fun2 arg2 -> do
-        subsumes fun1 fun2
-        subsumes arg1 arg2
-    _ -> typeError (UnableToUnify Type val)
-subsumes val1@(PiClosure name1 domain1 codomain1 env1) val = case val of
+        subsumes loc fun1 fun2
+        subsumes loc arg1 arg2
+    _ -> typeError (UnableToUnify loc Type val)
+subsumes loc val1@(PiClosure name1 domain1 codomain1 env1) val = case val of
     PiClosure name2 domain2 codomain2 env2 -> do
         -- This is contravariant so the order is swapped
-        subsumes domain2 domain1
+        subsumes loc domain2 domain1
         -- TODO: Ideally we should use different names for debugging, but the same indices or something
         -- (although we need to makes sure to display that to the user correctly)
         skolem <- cachedValue . StuckVar =<< freshVar (fromMaybe "a" $ name1 <|> name2)
@@ -269,9 +269,9 @@ subsumes val1@(PiClosure name1 domain1 codomain1 env1) val = case val of
         codomainValue1 <- eval updatedEnv1 codomain1
         codomainValue2 <- eval updatedEnv2 codomain2
 
-        subsumes codomainValue1 codomainValue2
-    _ -> typeError (UnableToUnify val1 val)
-subsumes val1@(LambdaClosure name1 body1 env1) val = case val of
+        subsumes loc codomainValue1 codomainValue2
+    _ -> typeError (UnableToUnify loc val1 val)
+subsumes loc val1@(LambdaClosure name1 body1 env1) val = case val of
     LambdaClosure name2 body2 env2 -> do
         -- TODO: We should not arbitrarily pick one name here (see PiClosure above)
         skolem <- cachedValue (StuckVar name1)
@@ -279,5 +279,5 @@ subsumes val1@(LambdaClosure name1 body1 env1) val = case val of
         bodyValue1 <- eval (bindEval name1 skolem env1) body1
         bodyValue2 <- eval (bindEval name2 skolem env2) body2
 
-        subsumes bodyValue1 bodyValue2
-    _ -> typeError (UnableToUnify val1 val)
+        subsumes loc bodyValue1 bodyValue2
+    _ -> typeError (UnableToUnify loc val1 val)

@@ -12,11 +12,14 @@ module Vega.Syntax (
     EvalEnv (..),
     TypeM (..),
     TypeError (..),
+    Loc,
+    getLoc
 ) where
 
 import Vega.Prelude
 
 import Vega.Cached (Cached)
+import Vega.Loc (Loc, HasLoc(..))
 import Vega.Pretty qualified as Pretty
 
 type Name = Text
@@ -24,24 +27,24 @@ type Name = Text
 data Pass = Parsed | Typed
 
 data Expr (pass :: Pass)
-    = Var Name
-    | App (Expr pass) (Expr pass)
-    | Lambda Name (Expr pass)
-    | Sequence [Statement pass]
-    | Pi (Maybe Name) (TypeExpr pass) (Expr pass)
-    | TypeLit
+    = Var Loc Name
+    | App Loc (Expr pass) (Expr pass)
+    | Lambda Loc Name (Expr pass)
+    | Sequence Loc [Statement pass]
+    | Pi Loc (Maybe Name) (TypeExpr pass) (Expr pass)
+    | TypeLit Loc
     deriving (Show)
 
 data Statement (pass :: Pass)
-    = Let Name (Maybe (TypeExpr pass)) (Expr pass)
+    = Let Loc Name (Maybe (TypeExpr pass)) (Expr pass)
     | RunExpr (Expr pass)
     deriving (Show)
 
 type TypeExpr = Expr
 
 data Decl pass
-    = DeclVar Name (TypeExpr pass) (Expr pass)
-    | DeclFunction Name (TypeExpr pass) [Name] (Expr pass)
+    = DeclVar Loc Name (TypeExpr pass) (Expr pass)
+    | DeclFunction Loc Name (TypeExpr pass) [Name] (Expr pass)
     deriving (Show)
 
 data Program pass = Program
@@ -74,11 +77,11 @@ newtype TypeM a
     deriving (Functor, Applicative, Monad, MonadIO)
 
 data TypeError
-    = UnableToUnify TypeValue TypeValue
-    | ApplicationOfNonPi TypeValue
-    | UnableToInferLambda
-    | DefiningLambdaAsNonPi TypeValue
-    | MoreArgumentsThanInType Int
+    = UnableToUnify Loc TypeValue TypeValue
+    | ApplicationOfNonPi Loc TypeValue
+    | UnableToInferLambda Loc
+    | DefiningLambdaAsNonPi Loc TypeValue
+    | MoreArgumentsThanInType Loc Int
 
 instance Pretty.Pretty Value where
     pretty :: (?style :: style, Pretty.TextStyle style) => Value -> Pretty.Doc style
@@ -117,25 +120,25 @@ instance Pretty.Pretty Value where
 
 instance Pretty.Pretty (Expr pass) where
     pretty = \case
-        Var name -> Pretty.identifier name
-        App funExpr argExpr ->
+        Var _ name -> Pretty.identifier name
+        App _ funExpr argExpr ->
             Pretty.paren "("
                 <> Pretty.pretty funExpr
                 <> Pretty.literal " "
                 <> Pretty.pretty argExpr
                 <> Pretty.paren ")"
-        Lambda name body ->
+        Lambda _ name body ->
             Pretty.operator "\\"
                 <> Pretty.identifier name
                 <> Pretty.literal " "
                 <> Pretty.operator "->"
                 <> Pretty.literal " "
                 <> Pretty.pretty body
-        Sequence statements ->
+        Sequence _ statements ->
             Pretty.paren "{"
                 <> Pretty.intercalate (Pretty.operator ";") (map Pretty.pretty statements)
                 <> Pretty.paren "}"
-        Pi Nothing ty body ->
+        Pi _ Nothing ty body ->
             Pretty.paren "("
                 <> Pretty.pretty ty
                 <> Pretty.paren ")"
@@ -143,7 +146,7 @@ instance Pretty.Pretty (Expr pass) where
                 <> Pretty.operator "->"
                 <> Pretty.literal " "
                 <> Pretty.pretty body
-        Pi (Just name) ty body ->
+        Pi _ (Just name) ty body ->
             Pretty.paren "("
                 <> Pretty.identifier name
                 <> Pretty.literal " "
@@ -155,11 +158,11 @@ instance Pretty.Pretty (Expr pass) where
                 <> Pretty.operator "->"
                 <> Pretty.literal " "
                 <> Pretty.pretty body
-        TypeLit -> Pretty.keyword "Type"
+        TypeLit _ -> Pretty.keyword "Type"
 
 instance Pretty.Pretty (Statement pass) where
     pretty = \case
-        Let name Nothing expr ->
+        Let _ name Nothing expr ->
             Pretty.keyword "let"
                 <> Pretty.literal " "
                 <> Pretty.identifier name
@@ -167,7 +170,7 @@ instance Pretty.Pretty (Statement pass) where
                 <> Pretty.operator "="
                 <> Pretty.literal " "
                 <> Pretty.pretty expr
-        Let name (Just ty) expr ->
+        Let _ name (Just ty) expr ->
             Pretty.keyword "let"
                 <> Pretty.literal " "
                 <> Pretty.identifier name
@@ -180,3 +183,12 @@ instance Pretty.Pretty (Statement pass) where
                 <> Pretty.literal " "
                 <> Pretty.pretty expr
         RunExpr expr -> Pretty.pretty expr
+
+instance HasLoc (Expr pass) where
+    getLoc = \case
+        Var loc _ -> loc
+        App loc _ _ -> loc
+        Lambda loc _ _ -> loc
+        Sequence loc _ -> loc
+        Pi loc _ _ _ -> loc
+        TypeLit loc -> loc

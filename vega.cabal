@@ -28,6 +28,7 @@ library
       Vega.Cached
       Vega.Error
       Vega.Lexer
+      Vega.Loc
       Vega.Parser
       Vega.Prelude
       Vega.Pretty
@@ -48,7 +49,10 @@ library
       OverloadedStrings
       StrictData
       ImplicitParams
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns
+      DisambiguateRecordFields
+      ViewPatterns
+      NoFieldSelectors
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -Werror=missing-methods
   build-depends:
       array
     , base >=4.7 && <5
@@ -73,7 +77,10 @@ executable vega
       OverloadedStrings
       StrictData
       ImplicitParams
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N
+      DisambiguateRecordFields
+      ViewPatterns
+      NoFieldSelectors
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -Werror=missing-methods -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array
     , base >=4.7 && <5
@@ -100,7 +107,10 @@ test-suite vega-test
       OverloadedStrings
       StrictData
       ImplicitParams
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -threaded -rtsopts -with-rtsopts=-N
+      DisambiguateRecordFields
+      ViewPatterns
+      NoFieldSelectors
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -Werror=missing-methods -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array
     , base >=4.7 && <5

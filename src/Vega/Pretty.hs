@@ -33,12 +33,12 @@ data ANSI = ANSI
 instance TextStyle ANSI where
     literal text = text
 
-    identifier text = "\x1b[1m\STX" <> text <> "\x1b[0m\STX"
-    keyword text = "\x1b[96m\STX" <> text <> "\x1b[0m\STX"
-    operator text = "\x1b[94m\STX" <> text <> "\x1b[0m\STX"
+    identifier text = "\ESC[1m\STX" <> text <> "\ESC[0m\STX"
+    keyword text = "\ESC[96m\STX" <> text <> "\ESC[0m\STX"
+    operator text = "\ESC[94m\STX" <> text <> "\ESC[0m\STX"
     paren = operator
-    error text = "\x1b[31m\STX" <> text <> "\x1b[0m\STX"
-    emphasis text = "\x1b[1m\STX" <> text <> "\x1b[0m\STX"
-    number num = "\x1b[1m\x1b[93m\STX" <> show num <> "\x1b[0m\STX"
+    error text = "\ESC[31m\ESC[38;2;255;0;0m\STX" <> text <> "\ESC[0m\STX"
+    emphasis text = "\ESC[1m\STX" <> text <> "\ESC[0m\STX"
+    number num = "\ESC[1m\ESC[93m\STX" <> show num <> "\ESC[0m\STX"
 
     type Doc ANSI = Text

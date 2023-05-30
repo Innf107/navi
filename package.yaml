@@ -34,6 +34,7 @@ ghc-options:
 - -Wno-name-shadowing
 - -Werror=incomplete-patterns
 - -Werror=incomplete-uni-patterns
+- -Werror=missing-methods
 
 library:
   source-dirs: src
@@ -72,3 +73,6 @@ default-extensions:
   - OverloadedStrings
   - StrictData
   - ImplicitParams
+  - DisambiguateRecordFields
+  - ViewPatterns
+  - NoFieldSelectors

@@ -1,15 +1,18 @@
 module Vega.Lexer (
     run,
     Token (..),
+    TokenClass (..),
     LexError (..),
 ) where
 
 import Vega.Prelude
 
+import Vega.Loc (Loc (..))
+
 import Data.Char qualified as Char
 import Data.Text qualified as Text
 
-data Token
+data TokenClass
     = IDENT Text
     | LET
     | TYPE
@@ -25,15 +28,27 @@ data Token
     | EOF
     deriving (Show)
 
+data Token = Token TokenClass Loc
+
 data LexError
     = UnexpectedChar Char
     | UnexpectedEOF
 
 data LexState = LexState
     { underlying :: Text
+    , fileName :: String
+    , startColumn :: Int
+    , startLine :: Int
+    , endColumn :: Int
+    , endLine :: Int
     }
 
 newtype LexM a = MkLexM (ExceptT LexError (State LexState) a) deriving (Functor, Applicative, Monad)
+
+emit :: TokenClass -> LexM Token
+emit tokenClass = MkLexM $ do
+    LexState{fileName, startLine, startColumn, endLine, endColumn} <- get
+    pure (Token tokenClass (Loc{fileName, startLine, startColumn, endLine, endColumn}))
 
 peekChar :: LexM (Maybe Char)
 peekChar = do
@@ -43,28 +58,47 @@ peekChar = do
 advance :: LexM ()
 advance = MkLexM $ lift $ modify \state -> case Text.uncons state.underlying of
     Nothing -> state
-    Just (_, rest) ->
-        state{underlying = rest}
+    Just (char, rest) ->
+        case char of
+            '\n' ->
+                state
+                    { underlying = rest
+                    , Vega.Lexer.endColumn = 1
+                    , Vega.Lexer.endLine = state.endLine + 1
+                    }
+            _ ->
+                state
+                    { underlying = rest
+                    , Vega.Lexer.endColumn = state.endColumn + 1
+                    }
+
+advanceWhitespace :: LexM ()
+advanceWhitespace = MkLexM $ modify \state ->
+    state
+        { Vega.Lexer.startColumn = state.endColumn
+        , Vega.Lexer.startLine = state.endLine
+        }
 
 lexError :: LexError -> LexM a
 lexError = MkLexM . throwError
 
 lex :: LexM Token
-lex =
+lex = do
+    advanceWhitespace
     peekChar >>= \case
-        Nothing -> pure EOF
-        Just '\\' -> advance >> pure LAMBDA
-        Just ':' -> advance >> pure COLON
-        Just '=' -> advance >> pure EQUALS
-        Just '(' -> advance >> pure LPAREN
-        Just ')' -> advance >> pure RPAREN
-        Just '{' -> advance >> pure LBRACE
-        Just '}' -> advance >> pure RBRACE
-        Just ';' -> advance >> pure SEMI
+        Nothing -> emit EOF
+        Just '\\' -> advance >> emit LAMBDA
+        Just ':' -> advance >> emit COLON
+        Just '=' -> advance >> emit EQUALS
+        Just '(' -> advance >> emit LPAREN
+        Just ')' -> advance >> emit RPAREN
+        Just '{' -> advance >> emit LBRACE
+        Just '}' -> advance >> emit RBRACE
+        Just ';' -> advance >> emit SEMI
         Just '-' -> do
             advance
             peekChar >>= \case
-                Just '>' -> advance >> pure ARROW
+                Just '>' -> advance >> emit ARROW
                 Just '-' -> advance >> lexLineComment
                 Just char -> lexError (UnexpectedChar char)
                 Nothing -> lexError UnexpectedEOF
@@ -76,17 +110,17 @@ lex =
 lexLineComment :: LexM Token
 lexLineComment =
     peekChar >>= \case
-        Nothing -> pure EOF
+        Nothing -> emit EOF
         Just '\n' -> advance >> lex
         Just _ -> advance >> lexLineComment
 
 lexIdent :: [Char] -> LexM Token
 lexIdent chars =
     peekChar >>= \case
-        Nothing -> pure builtIdent
+        Nothing -> emit builtIdent
         Just char
             | Char.isAlphaNum char -> advance >> lexIdent (char : chars)
-            | otherwise -> pure builtIdent
+            | otherwise -> emit builtIdent
   where
     builtIdent =
         case reverse chars of
@@ -94,14 +128,22 @@ lexIdent chars =
             "Type" -> TYPE
             ident -> IDENT (toText ident)
 
-runLexM :: Text -> LexM a -> Either LexError a
-runLexM text (MkLexM lexM) = do
-    let initialState = LexState{underlying = text}
+runLexM :: FilePath -> Text -> LexM a -> Either LexError a
+runLexM fileName text (MkLexM lexM) = do
+    let initialState =
+            LexState
+                { underlying = text
+                , fileName
+                , startLine = 1
+                , startColumn = 1
+                , endLine = 1
+                , endColumn = 1
+                }
     evalState (runExceptT lexM) initialState
 
-run :: Text -> Either LexError [Token]
-run source =
-    runLexM source $ fix \recurse ->
+run :: FilePath -> Text -> Either LexError [Token]
+run fileName source =
+    runLexM fileName source $ fix \recurse ->
         lex >>= \case
-            EOF -> pure []
+            Token EOF _ -> pure []
             token -> (token :) <$> recurse
