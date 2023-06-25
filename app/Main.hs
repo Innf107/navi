@@ -1,16 +1,16 @@
 module Main (main) where
 
-import Vega.Prelude
+import Navi.Prelude
 
-import Vega.Config qualified as Config
-import Vega.Pretty (ANSI (..), pretty)
+import Navi.Config qualified as Config
+import Navi.Pretty (ANSI (..), pretty)
 
 import Data.Text.IO (hPutStrLn)
-import Vega.Error qualified as Error
-import Vega.Lexer qualified as Lexer
-import Vega.Parser qualified as Parser
-import Vega.ToLua qualified as ToLua
-import Vega.Types qualified as Types
+import Navi.Error qualified as Error
+import Navi.Lexer qualified as Lexer
+import Navi.Parser qualified as Parser
+import Navi.ToLua qualified as ToLua
+import Navi.Types qualified as Types
 
 data ArgPresence = Partial | Completed
 type family Entry presence a where
@@ -48,7 +48,7 @@ failUsage message = do
     hPutStrLn stderr $
         message
             <> "\n\n"
-            <> "Usage: vega [OPTIONS] <FILE>\n"
+            <> "Usage: navi [OPTIONS] <FILE>\n"
             <> "\n"
             <> "Options"
             <> "    --print-debruijn    Display DeBruijn levels and indices of variables in error messages"

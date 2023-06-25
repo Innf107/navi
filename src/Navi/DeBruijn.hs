@@ -1,4 +1,4 @@
-module Vega.DeBruijn (
+module Navi.DeBruijn (
     Level,
     Index,
     Variables,
@@ -10,7 +10,7 @@ module Vega.DeBruijn (
     nextLevel,
 ) where
 
-import Vega.Prelude
+import Navi.Prelude
 
 import Data.IntMap qualified as IntMap
 

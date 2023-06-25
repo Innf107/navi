@@ -1,11 +1,11 @@
-module Vega.Delay (
+module Navi.Delay (
     Delay,
     delay,
     delayValue,
     force,
 ) where
 
-import Vega.Prelude
+import Navi.Prelude
 
 {- | 'Delay m a' represents a lazy effectful computation in a Monad 'm'.
     Repeatedly forcing a delayed value will only compute the result, and

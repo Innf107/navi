@@ -1,4 +1,4 @@
-module Vega.Prelude (
+module Navi.Prelude (
     module Export,
     HsType,
     mapAccumRM,

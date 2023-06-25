@@ -1,4 +1,4 @@
-module Vega.Syntax (
+module Navi.Syntax (
     Pass (..),
     Name,
     Expr (..),
@@ -16,13 +16,13 @@ module Vega.Syntax (
     getLoc,
 ) where
 
-import Vega.Prelude
+import Navi.Prelude
 
-import Vega.Config qualified as Config
-import Vega.DeBruijn (Index, Level, Variables)
-import Vega.Delay (Delay)
-import Vega.Loc (HasLoc (..), Loc)
-import Vega.Pretty qualified as Pretty
+import Navi.Config qualified as Config
+import Navi.DeBruijn (Index, Level, Variables)
+import Navi.Delay (Delay)
+import Navi.Loc (HasLoc (..), Loc)
+import Navi.Pretty qualified as Pretty
 
 import GHC.Show qualified as Show
 

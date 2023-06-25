@@ -1,23 +1,23 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 
-module Vega.Types (
+module Navi.Types (
     TypeError (..),
     typecheck,
     runTypeM,
 ) where
 
-import Vega.Prelude
+import Navi.Prelude
 
-import Vega.Syntax
+import Navi.Syntax
 
-import Vega.Delay (Delay, delay, delayValue, force)
+import Navi.Delay (Delay, delay, delayValue, force)
 
-import Vega.DeBruijn (Level, addVariable, emptyVariables, getVariable, levelToIndex, nextLevel, variableEntries)
+import Navi.DeBruijn (Level, addVariable, emptyVariables, getVariable, levelToIndex, nextLevel, variableEntries)
 
 import Data.Foldable (foldrM)
 import Data.Map qualified as Map
 import Data.Unique (hashUnique, newUnique)
-import Vega.Pretty qualified as Pretty
+import Navi.Pretty qualified as Pretty
 
 runTypeM :: TypeM a -> IO (Either TypeError a)
 runTypeM (MkTypeM typeM) = runExceptT typeM
@@ -60,7 +60,7 @@ infer :: TypeEnv -> Expr Parsed -> TypeM (Expr Typed, TypeValue)
 infer env = \case
     Var loc () name ->
         case lookup name env.variables of
-            Nothing -> error ("Vega.Types.infer: Variable not found during type check: " <> name)
+            Nothing -> error ("Navi.Types.infer: Variable not found during type check: " <> name)
             Just (ty, level) -> do
                 let index = levelToIndex level env.evalEnv.varValues
                 pure (Var loc index name, ty)
@@ -332,12 +332,12 @@ errorEnv :: HasCallStack => TypeEnv -> Text -> TypeM a
 errorEnv env message = do
     let ?style = Pretty.Plain
     envDoc <- displayTypeEnv env
-    MkTypeM $ writeFileText "_vegaEnv" envDoc
+    MkTypeM $ writeFileText "_naviEnv" envDoc
     error message
 
 errorEvalEnv :: HasCallStack => EvalEnv -> Text -> TypeM a
 errorEvalEnv env message = do
     let ?style = Pretty.Plain
     envDoc <- displayEvalEnv env
-    MkTypeM $ writeFileText "_vegaEnv" envDoc
+    MkTypeM $ writeFileText "_naviEnv" envDoc
     error message

@@ -1,10 +1,10 @@
-module Vega.Loc (
+module Navi.Loc (
     Loc (..),
     HasLoc (..),
     merge,
 ) where
 
-import Vega.Prelude
+import Navi.Prelude
 
 import GHC.Show qualified as S
 

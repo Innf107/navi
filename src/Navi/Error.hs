@@ -1,13 +1,13 @@
-module Vega.Error (Error (..)) where
+module Navi.Error (Error (..)) where
 
-import Vega.Prelude
+import Navi.Prelude
 
-import Vega.Loc qualified as Loc
-import Vega.Pretty qualified as Pretty
+import Navi.Loc qualified as Loc
+import Navi.Pretty qualified as Pretty
 
-import Vega.Lexer qualified as Lexer
-import Vega.Parser qualified as Parser
-import Vega.Types qualified as Types
+import Navi.Lexer qualified as Lexer
+import Navi.Parser qualified as Parser
+import Navi.Types qualified as Types
 
 data Error
     = LexError Lexer.LexError

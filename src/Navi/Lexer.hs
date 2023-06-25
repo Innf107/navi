@@ -1,13 +1,13 @@
-module Vega.Lexer (
+module Navi.Lexer (
     run,
     Token (..),
     TokenClass (..),
     LexError (..),
 ) where
 
-import Vega.Prelude
+import Navi.Prelude
 
-import Vega.Loc (Loc (..))
+import Navi.Loc (Loc (..))
 
 import Data.Char qualified as Char
 import Data.Text qualified as Text
@@ -63,20 +63,20 @@ advance = MkLexM $ lift $ modify \state -> case Text.uncons state.underlying of
             '\n' ->
                 state
                     { underlying = rest
-                    , Vega.Lexer.endColumn = 1
-                    , Vega.Lexer.endLine = state.endLine + 1
+                    , Navi.Lexer.endColumn = 1
+                    , Navi.Lexer.endLine = state.endLine + 1
                     }
             _ ->
                 state
                     { underlying = rest
-                    , Vega.Lexer.endColumn = state.endColumn + 1
+                    , Navi.Lexer.endColumn = state.endColumn + 1
                     }
 
 advanceWhitespace :: LexM ()
 advanceWhitespace = MkLexM $ modify \state ->
     state
-        { Vega.Lexer.startColumn = state.endColumn
-        , Vega.Lexer.startLine = state.endLine
+        { Navi.Lexer.startColumn = state.endColumn
+        , Navi.Lexer.startLine = state.endLine
         }
 
 lexError :: LexError -> LexM a

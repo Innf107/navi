@@ -1,4 +1,4 @@
-module Vega.Pretty (
+module Navi.Pretty (
     Pretty (..),
     TextStyle (..),
     intercalate,
@@ -6,7 +6,7 @@ module Vega.Pretty (
     Plain (Plain),
 ) where
 
-import Vega.Prelude hiding (intercalate)
+import Navi.Prelude hiding (intercalate)
 
 class Pretty a where
     pretty :: (?style :: style, TextStyle style) => a -> Doc style

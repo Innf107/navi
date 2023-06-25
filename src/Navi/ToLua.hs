@@ -1,8 +1,8 @@
-module Vega.ToLua (compile) where
+module Navi.ToLua (compile) where
 
-import Vega.Prelude
+import Navi.Prelude
 
-import Vega.Syntax
+import Navi.Syntax
 
 import Data.Text qualified as Text
 
@@ -15,7 +15,7 @@ compile Program{declarations} =
 compileDecl :: Decl Typed -> Text
 compileDecl (DeclVar _ name _ty body) =
     "local " <> name <> " = " <> compileExpr body
-compileDecl (DeclFunction _ _ _ [] _) = error "Vega.ToLua.compileDecl: DeclFunction without parameters"
+compileDecl (DeclFunction _ _ _ [] _) = error "Navi.ToLua.compileDecl: DeclFunction without parameters"
 compileDecl (DeclFunction loc name _typeExpr (param : params) body) =
     "local function "
         <> name
@@ -43,7 +43,7 @@ compileStatements (Let _ name _ty body : rest) =
         <> compileStatements rest
 compileStatements [RunExpr expr] = "return " <> compileExpr expr
 compileStatements (RunExpr expr : rest) =
-    -- Not every Vega expression is a valid lua statement so we bind it
+    -- Not every Navi expression is a valid lua statement so we bind it
     -- to an unused variable to be sure
     "local _ = "
         <> compileExpr expr

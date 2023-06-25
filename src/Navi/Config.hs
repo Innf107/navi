@@ -1,7 +1,7 @@
-module Vega.Config (setPrintDeBruijn, getPrintDeBruijn) where
+module Navi.Config (setPrintDeBruijn, getPrintDeBruijn) where
 
 import System.IO.Unsafe (unsafePerformIO)
-import Vega.Prelude
+import Navi.Prelude
 
 printDeBruijnRef :: IORef Bool
 printDeBruijnRef = unsafePerformIO $ newIORef False

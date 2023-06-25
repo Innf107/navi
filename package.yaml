@@ -1,6 +1,6 @@
-name:                vega
+name:                navi
 version:             0.1.0.0
-github:              "Innf107/vega"
+github:              "Innf107/navi"
 license:             BSD3
 author:              "Finn Schneider"
 maintainer:          "mail@prophetlabs.de"
@@ -8,9 +8,8 @@ copyright:           "2023 Finn Schneider"
 
 extra-source-files:
 - README.md
-- CHANGELOG.md
 
-description:         Please see the README on GitHub at <https://github.com/Innf107/vega#readme>
+description:         Please see the README on GitHub at <https://github.com/Innf107/navi#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -41,7 +40,7 @@ library:
   source-dirs: src
 
 executables:
-  vega:
+  navi:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -49,10 +48,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - vega
+    - navi
 
 tests:
-  vega-test:
+  navi-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -60,7 +59,7 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - vega
+    - navi
 
 language: GHC2021
 

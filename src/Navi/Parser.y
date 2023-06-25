@@ -1,14 +1,14 @@
 {
 {-# LANGUAGE NoStrictData #-}
-module Vega.Parser (parse, ParseError(..), ParserM, runParserM) where
+module Navi.Parser (parse, ParseError(..), ParserM, runParserM) where
 
 import Prelude hiding (lex)
 
 import Relude (Text)
 
-import Vega.Syntax
-import Vega.Lexer (Token(..), TokenClass(..))
-import Vega.Loc (Loc(..), merge)
+import Navi.Syntax
+import Navi.Lexer (Token(..), TokenClass(..))
+import Navi.Loc (Loc(..), merge)
 
 import Control.Monad.Except (ExceptT, throwError, runExceptT)
 
