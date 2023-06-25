@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Vega.Types (
     TypeError (..),
     typecheck,
@@ -8,9 +10,14 @@ import Vega.Prelude
 
 import Vega.Syntax
 
-import Vega.Cached (Cached, cached, cachedValue, force)
+import Vega.Delay (Delay, delay, delayValue, force)
 
+import Vega.DeBruijn (Level, addVariable, emptyVariables, getVariable, levelToIndex, nextLevel, variableEntries)
+
+import Data.Foldable (foldrM)
+import Data.Map qualified as Map
 import Data.Unique (hashUnique, newUnique)
+import Vega.Pretty qualified as Pretty
 
 runTypeM :: TypeM a -> IO (Either TypeError a)
 runTypeM (MkTypeM typeM) = runExceptT typeM
@@ -18,25 +25,32 @@ runTypeM (MkTypeM typeM) = runExceptT typeM
 typeError :: TypeError -> TypeM a
 typeError error = MkTypeM (throwError error)
 
-freshVar :: Name -> TypeM Name
--- TODO: This should be very... different
-freshVar name = MkTypeM do
-    unique <- liftIO newUnique
-    pure (name <> show (hashUnique unique))
 
-bind :: Name -> TypeValue -> Cached TypeM Value -> TypeEnv -> TypeEnv
-bind name typeValue value env =
+bind :: Maybe Name -> TypeValue -> Delay TypeM Value -> TypeEnv -> TypeEnv
+bind name typeValue value env = do
+    let (evalEnv, level) = bindEval value env.evalEnv
     env
-        { varTypes = insert name typeValue env.varTypes
-        , evalEnv =
-            env.evalEnv
-                { varValues = insert name value env.evalEnv.varValues
-                }
+        { variables =
+            case name of
+                Just name -> insert name (typeValue, level) env.variables
+                Nothing -> env.variables
+        , evalEnv
         }
 
-bindEval :: Name -> Cached TypeM Value -> EvalEnv -> EvalEnv
-bindEval name value evalEnv =
-    evalEnv{varValues = insert name value evalEnv.varValues}
+bindEval :: Delay TypeM Value -> EvalEnv -> (EvalEnv, Level)
+bindEval value evalEnv = do
+    let (varValues, level) = addVariable value evalEnv.varValues
+    (evalEnv{varValues}, level)
+
+bindStuck :: Maybe Name -> TypeValue -> TypeEnv -> TypeM TypeEnv
+bindStuck mname ty env = do
+    varValue <- delayValue (StuckVar (fromMaybe "α" mname) (nextLevel env.evalEnv.varValues))
+    pure $ bind mname ty varValue env
+
+bindStuckEval :: Name -> EvalEnv -> TypeM EvalEnv
+bindStuckEval name env = do
+    varValue <- delayValue (StuckVar name (nextLevel env.varValues))
+    pure $ fst $ bindEval varValue env
 
 data CheckOrInfer a where
     Check :: TypeValue -> CheckOrInfer ()
@@ -44,20 +58,22 @@ data CheckOrInfer a where
 
 infer :: TypeEnv -> Expr Parsed -> TypeM (Expr Typed, TypeValue)
 infer env = \case
-    Var loc name ->
-        case lookup name env.varTypes of
+    Var loc () name ->
+        case lookup name env.variables of
             Nothing -> error ("Vega.Types.infer: Variable not found during type check: " <> name)
-            Just ty -> pure (Var loc name, ty)
+            Just (ty, level) -> do
+                let index = levelToIndex level env.evalEnv.varValues
+                pure (Var loc index name, ty)
     App loc funExpr argExpr -> do
         (funExpr, funType) <- infer env funExpr
         case funType of
             PiClosure name argType body piEnv -> do
                 argExpr <- check env argType argExpr
 
-                argValue <- cached (eval env.evalEnv argExpr)
-                let updatedEnv = case name of
-                        Just name -> bindEval name argValue piEnv
-                        Nothing -> env.evalEnv
+                argValue <- delay (eval env.evalEnv argExpr)
+                let (updatedEnv, _level) = bindEval argValue piEnv
+
+                traceShowM =<< force argValue
                 resultType <- eval updatedEnv body
                 pure (App loc funExpr argExpr, resultType)
             funType -> typeError (ApplicationOfNonPi loc funType)
@@ -67,43 +83,35 @@ infer env = \case
         pure (Sequence loc statements, ty)
     Pi loc name typeExpr body -> do
         typeExpr <- check env Type typeExpr
+
+        traceM (let ?style = Pretty.ANSI in toString $ Pretty.pretty typeExpr)
         typeValue <- eval env.evalEnv typeExpr
 
-        updatedEnv <- case name of
-            -- If there is no name in the source syntax, we don't need to bind anything.
-            -- This might change if we ever switch to DeBruijn indices.
-            Nothing -> pure env
-            Just name -> do
-                varValue <- cachedValue (StuckVar name)
-                pure $ bind name typeValue varValue env
+        updatedEnv <- bindStuck name typeValue env
 
         body <- check updatedEnv Type body
         pure (Pi loc name typeExpr body, Type)
-    -- Yes Type : Type. I honestly couldn't care less about logical consistency
+    -- Yes Type : Type. Fight me
     TypeLit loc -> pure (TypeLit loc, Type)
 
 check :: TypeEnv -> TypeValue -> Expr Parsed -> TypeM (Expr Typed)
 check env expectedType expr = do
     let deferToInference = do
             (expr, ty) <- infer env expr
-            subsumes (getLoc expr) ty expectedType
+            subsumes (getLoc expr) env.evalEnv ty expectedType
             pure expr
     case expr of
-        Var _ _ -> deferToInference
+        Var _ () _ -> deferToInference
         App _ _ _ -> deferToInference
         Lambda loc name body -> do
             case expectedType of
+                -- TODO: What if 'expectedType' is a Stuck{Var,App}?
                 PiClosure piName domain codomain piEnv -> do
-                    varValue <- cachedValue (StuckVar name)
-                    let updatedEnv = bind name domain varValue env
+                    bodyEnv <- bindStuck (Just name) domain env
 
-                    codomain <- case piName of
-                        Just piName -> do
-                            piVarValue <- cachedValue (StuckVar piName)
-                            eval (bindEval piName piVarValue piEnv) codomain
-                        Nothing -> eval piEnv codomain
+                    codomain <- evalClosureAbstractMaybe piName codomain piEnv 
 
-                    body <- check updatedEnv codomain body
+                    body <- check bodyEnv codomain body
                     pure (Lambda loc name body)
                 _ -> typeError (DefiningLambdaAsNonPi loc expectedType)
         Sequence _ _ -> undefined
@@ -115,8 +123,8 @@ checkStatements Infer _seqLoc env [RunExpr expr] = do
     (expr, ty) <- infer env expr
     pure ([RunExpr expr], ty)
 checkStatements Infer _seqLoc _env [] = pure ([], undefined) -- TODO: Return () here
-checkStatements (Check ty) seqLoc _env [] = do
-    subsumes seqLoc ty undefined
+checkStatements (Check ty) seqLoc env [] = do
+    subsumes seqLoc env.evalEnv ty undefined
     pure ([], ()) -- TODO: ()
 checkStatements checkOrInfer seqLoc env (RunExpr expr : statements) = do
     expr <- check env undefined expr -- TODO: ()
@@ -135,9 +143,9 @@ checkStatements checkOrInfer seqLoc env (Let loc name maybeTypeExpr body : state
             body <- check env typeValue body
             pure (body, typeValue, Just typeExpr)
 
-    bodyValue <- cached (eval env.evalEnv body)
+    bodyValue <- delay (eval env.evalEnv body)
 
-    let updatedEnv = bind name varType bodyValue env
+    let updatedEnv = bind (Just name) varType bodyValue env
     (statements, result) <- checkStatements checkOrInfer seqLoc updatedEnv statements
     pure (Let loc name maybeTypeExpr body : statements, result)
 
@@ -146,10 +154,14 @@ checkDecl env = \case
     DeclVar loc name typeExpr body -> do
         typeExpr <- check env Type typeExpr
         typeValue <- eval env.evalEnv typeExpr
+
+        traceM $ toString $ "declVar: " <> name <> " : " <> (let ?style = Pretty.ANSI in Pretty.pretty typeValue)
+
         body <- check env typeValue body
 
-        bodyValue <- cached (eval env.evalEnv body)
-        let updatedEnv = bind name typeValue bodyValue env
+
+        bodyValue <- delay (eval env.evalEnv body)
+        let updatedEnv = bind (Just name) typeValue bodyValue env
 
         pure (updatedEnv, DeclVar loc name typeExpr body)
     DeclFunction loc functionName typeExpr params body -> do
@@ -159,22 +171,24 @@ checkDecl env = \case
 
         (paramsWithTypes, bodyType) <- splitFunctionType loc typeValue params
 
-        paramsWithTypesAndValues <- forM paramsWithTypes \(name, ty) -> do 
-            value <- cachedValue (StuckVar name)
-            pure (name, ty, value)
-
-        let envWithParams = foldr (\(name, ty, value) env -> bind name ty value env) env paramsWithTypesAndValues
+        envWithParams <-
+            foldrM
+                ( \(name, ty) env ->
+                    bindStuck (Just name) ty env
+                )
+                env
+                paramsWithTypes
 
         -- TODO: I hope not including the real value here is fine?
-        functionValue <- cachedValue (StuckVar functionName)
-        let bodyEnv = bind functionName typeValue functionValue envWithParams
+        bodyEnv <- bindStuck (Just functionName) typeValue envWithParams
 
         body <- check bodyEnv bodyType body
 
-        let updatedEnv = bind functionName typeValue functionValue env
+        -- TODO: Construct the actual value with closures here rather than a stuck value
+        -- TODO: Couldn't we use the closure inside the body as well?
+        updatedEnv <- bindStuck (Just functionName) typeValue env
 
         pure (updatedEnv, DeclFunction loc functionName typeExpr params body)
-
 
 splitFunctionType :: Loc -> TypeValue -> [Name] -> TypeM ([(Name, TypeValue)], TypeValue)
 splitFunctionType _loc ty [] = pure ([], ty)
@@ -187,28 +201,29 @@ splitFunctionType loc _ty params = typeError (MoreArgumentsThanInType loc (lengt
 
 evalClosureAbstractMaybe :: Maybe Name -> Expr Typed -> EvalEnv -> TypeM Value
 evalClosureAbstractMaybe mname expr env = do
-    env <- case mname of
-        Nothing -> pure env
-        Just name -> do
-            value <- cachedValue (StuckVar name)
-            pure $ bindEval name value env
+    env <- bindStuckEval (fromMaybe "α" mname) env
     eval env expr
 
 eval :: EvalEnv -> Expr Typed -> TypeM Value
 eval env = \case
-    Var _ name ->
-        case lookup name env.varValues of
-            Nothing -> pure $ StuckVar name
-            Just delayed -> force delayed
+    expr@(Var loc index name) -> do
+        traceM ("eval: " <> toString (let ?style = Pretty.ANSI in Pretty.pretty expr))
+        case getVariable index env.varValues of
+            Nothing -> do
+                errorEvalEnv env (show loc <> ": Undefined variable " <> show name <> " at out of range index " <> show index)
+            Just delayed -> do
+                val <- force delayed
+                traceM ("evalV: " <> toString (let ?style = Pretty.ANSI in Pretty.pretty val))
+                pure val
     App _ funExpr argExpr -> do
         funValue <- eval env funExpr
 
-        argValue <- cached $ eval env argExpr
+        argValue <- delay $ eval env argExpr
         case funValue of
             StuckVar{} -> StuckApp funValue <$> force argValue
             StuckApp{} -> StuckApp funValue <$> force argValue
-            LambdaClosure name body env -> do
-                eval (bindEval name argValue env) body
+            LambdaClosure _name body env -> do
+                eval (fst $ bindEval argValue env) body
             PiClosure{} -> error "Tried evaluating unsound application of non-function value"
             Type -> error "Tried evaluating unsound application of non-function value"
     (TypeLit _) -> pure Type
@@ -224,10 +239,10 @@ typecheck :: Program Parsed -> TypeM (Program Typed)
 typecheck Program{declarations} = do
     let initialEnv =
             TypeEnv
-                { varTypes = mempty
+                { variables = mempty
                 , evalEnv =
                     EvalEnv
-                        { varValues = mempty
+                        { varValues = emptyVariables
                         }
                 }
 
@@ -237,47 +252,92 @@ typecheck Program{declarations} = do
             { declarations = typedDecls
             }
 
--- | Assert that one type should be a subtype of another.
-subsumes :: Loc -> TypeValue -> TypeValue -> TypeM ()
-subsumes loc Type val = case val of
-    Type -> pure ()
-    _ -> typeError (UnableToUnify loc Type val)
-subsumes loc (StuckVar name1) val = case val of
-    -- TODO: Fuck, this is completely unsound. I either need a renamer or DeBruijn indices
-    (StuckVar name2) | name1 == name2 -> pure ()
-    _ -> typeError (UnableToUnify loc (StuckVar name1) val)
-subsumes loc (StuckApp fun1 arg1) val = case val of
-    StuckApp fun2 arg2 -> do
-        subsumes loc fun1 fun2
-        subsumes loc arg1 arg2
-    _ -> typeError (UnableToUnify loc Type val)
-subsumes loc val1@(PiClosure name1 domain1 codomain1 env1) val = case val of
-    PiClosure name2 domain2 codomain2 env2 -> do
-        -- This is contravariant so the order is swapped
-        subsumes loc domain2 domain1
-        -- TODO: Ideally we should use different names for debugging, but the same indices or something
-        -- (although we need to makes sure to display that to the user correctly)
-        skolem <- cachedValue . StuckVar =<< freshVar (fromMaybe "a" $ name1 <|> name2)
+-- | Assert that one type should be a subtype of another. (TODO: Will this ever actually do subtyping?)
+subsumes :: Loc -> EvalEnv -> TypeValue -> TypeValue -> TypeM ()
+subsumes loc env originalTy1 originalTy2 = do
+    traceM $ toString $ let ?style = Pretty.ANSI in "subsumes: " <> Pretty.pretty originalTy1 <> " <= " <> Pretty.pretty originalTy2
+    go originalTy1 originalTy2
+  where
+    unificationContext = (originalTy1, originalTy2)
 
-        let updatedEnv1 = case name1 of
-                Nothing -> env1
-                Just name1 -> bindEval name1 skolem env1
-        let updatedEnv2 = case name2 of
-                Nothing -> env2
-                Just name2 -> bindEval name2 skolem env2
+    go Type val = case val of
+        Type -> pure ()
+        _ -> typeError (UnableToUnify loc Type val unificationContext)
+    go (StuckVar name1 level1) val = case val of
+        (StuckVar _ level2) | level1 == level2 -> pure ()
+        _ -> typeError (UnableToUnify loc (StuckVar name1 level1) val unificationContext)
+    go (StuckApp fun1 arg1) val = case val of
+        StuckApp fun2 arg2 -> do
+            go fun1 fun2
+            go arg1 arg2
+        _ -> typeError (UnableToUnify loc Type val unificationContext)
+    go val1@(PiClosure name1 domain1 codomain1 piEnv1) val = case val of
+        PiClosure name2 domain2 codomain2 piEnv2 -> do
+            -- This is contravariant so the order is swapped
+            go domain2 domain1
 
-        codomainValue1 <- eval updatedEnv1 codomain1
-        codomainValue2 <- eval updatedEnv2 codomain2
+            -- TODO: How the fuck does this work?! The closure environments are different,
+            -- so this level might mean something very different in them doesn't it?
+            let level = nextLevel env.varValues
 
-        subsumes loc codomainValue1 codomainValue2
-    _ -> typeError (UnableToUnify loc val1 val)
-subsumes loc val1@(LambdaClosure name1 body1 env1) val = case val of
-    LambdaClosure name2 body2 env2 -> do
-        -- TODO: We should not arbitrarily pick one name here (see PiClosure above)
-        skolem <- cachedValue (StuckVar name1)
+            -- The names only exist for debugging purposes, so there is no issue if they are different.
+            -- The important part is that they have the same level
+            skolem1 <- delayValue (StuckVar (fromMaybe "α" $ name1) level)
+            skolem2 <- delayValue (StuckVar (fromMaybe "α" $ name2) level)
 
-        bodyValue1 <- eval (bindEval name1 skolem env1) body1
-        bodyValue2 <- eval (bindEval name2 skolem env2) body2
+            let (updatedEnv1, _) = bindEval skolem1 piEnv1
+            let (updatedEnv2, _) = bindEval skolem2 piEnv2
 
-        subsumes loc bodyValue1 bodyValue2
-    _ -> typeError (UnableToUnify loc val1 val)
+            codomainValue1 <- eval updatedEnv1 codomain1
+            codomainValue2 <- eval updatedEnv2 codomain2
+
+            go codomainValue1 codomainValue2
+        _ -> typeError (UnableToUnify loc val1 val unificationContext)
+    go val1@(LambdaClosure name1 body1 env1) val = case val of
+        LambdaClosure _name2 body2 env2 -> do
+            skolem <- delayValue (StuckVar name1 (nextLevel env.varValues))
+
+            bodyValue1 <- eval (fst $ bindEval skolem env1) body1
+            bodyValue2 <- eval (fst $ bindEval skolem env2) body2
+
+            go bodyValue1 bodyValue2
+        _ -> typeError (UnableToUnify loc val1 val unificationContext)
+
+displayTypeEnv :: (?style :: style, Pretty.TextStyle style) => TypeEnv -> TypeM (Pretty.Doc style)
+displayTypeEnv TypeEnv{variables, evalEnv} = do
+    evalEnvDoc <- displayEvalEnv evalEnv
+    pure $
+        Pretty.emphasis "------TYPES------\n"
+            <> Pretty.intercalate
+                (Pretty.literal "\n")
+                ( map
+                    (\(name, (ty, _)) -> Pretty.identifier name <> Pretty.literal " : " <> Pretty.pretty ty)
+                    (sortOn (\(_, (_, level)) -> level) (Map.toList variables))
+                )
+            <> Pretty.literal "\n"
+            <> evalEnvDoc
+
+displayEvalEnv :: (?style :: style, Pretty.TextStyle style) => EvalEnv -> TypeM (Pretty.Doc style)
+displayEvalEnv EvalEnv{varValues} = do
+    valueDocs <- traverse (\value -> Pretty.pretty <$> force value) (variableEntries varValues)
+    pure $
+        Pretty.emphasis "------VALUES------\n"
+            <> Pretty.intercalate
+                (Pretty.literal "\n")
+                valueDocs
+            <> Pretty.emphasis
+                "\n-----------------\n"
+
+errorEnv :: HasCallStack => TypeEnv -> Text -> TypeM a
+errorEnv env message = do
+    let ?style = Pretty.Plain
+    envDoc <- displayTypeEnv env
+    MkTypeM $ writeFileText "_vegaEnv" envDoc
+    error message
+
+errorEvalEnv :: HasCallStack => EvalEnv -> Text -> TypeM a
+errorEvalEnv env message = do
+    let ?style = Pretty.Plain
+    envDoc <- displayEvalEnv env
+    MkTypeM $ writeFileText "_vegaEnv" envDoc
+    error message

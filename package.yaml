@@ -17,6 +17,7 @@ dependencies:
 - relude
 - text
 - mtl
+- containers
 # required by happy
 - array
 
@@ -76,3 +77,5 @@ default-extensions:
   - DisambiguateRecordFields
   - ViewPatterns
   - NoFieldSelectors
+  - DerivingStrategies
+  - UndecidableInstances

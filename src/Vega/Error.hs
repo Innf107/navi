@@ -36,8 +36,13 @@ instance Pretty.Pretty Error where
                         <> show (map (\(Lexer.Token tokenClass _) -> tokenClass) $ take 10 tokens)
                     )
         Parser.UnexpectedEOF -> Pretty.literal "Unexpected end of file"
+        Parser.MismatchedDeclName loc sigName defName ->
+            prettyLoc loc
+                <> Pretty.literal "Mismatched variable name in definition.\n"
+                <> Pretty.literal "    The type signature defines a variable named " <> Pretty.identifier sigName <> Pretty.literal "\n"
+                <> Pretty.literal "             But its definition refers to it as " <> Pretty.identifier defName
     pretty (TypeError err) = case err of
-        Types.UnableToUnify loc actual expected ->
+        Types.UnableToUnify loc actual expected (fullActual, fullExpected) ->
             prettyLoc loc
                 <> Pretty.literal "Unable to unify\n"
                 <> Pretty.literal "       expected type "
@@ -45,6 +50,13 @@ instance Pretty.Pretty Error where
                 <> Pretty.literal "\n"
                 <> Pretty.literal "    with actual type "
                 <> Pretty.pretty actual
+                <> Pretty.literal "\n"
+                <> Pretty.literal "While trying to unify\n"
+                <> Pretty.literal "       expected type "
+                <> Pretty.pretty fullExpected
+                <> Pretty.literal "\n"
+                <> Pretty.literal "    with actual type "
+                <> Pretty.pretty fullActual
         Types.ApplicationOfNonPi loc value ->
             prettyLoc loc
                 <> Pretty.literal "Application of non-pi value: " <> Pretty.pretty value

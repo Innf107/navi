@@ -1,32 +1,32 @@
-module Vega.Cached (
-    Cached,
-    cached,
-    cachedValue,
+module Vega.Delay (
+    Delay,
+    delay,
+    delayValue,
     force,
 ) where
 
 import Vega.Prelude
 
-{- | 'Cached m a' represents a lazy effectful computation in a Monad 'm'.
-    Repeatedly forcing a cached value will only compute the result, and
+{- | 'Delay m a' represents a lazy effectful computation in a Monad 'm'.
+    Repeatedly forcing a delayed value will only compute the result, and
     therefore only perform the contained effects once.
 
     This is necessary, since Haskell's regular laziness mechanisms only apply in
     pure code (modulo unsafePerformIO).
 -}
-newtype Cached m a = MkCached (IORef (Either (m a) a))
+newtype Delay m a = MkDelay (IORef (Either (m a) a))
 
-{- | Cached a monadic computation. Any effects performed by the argument will only take effect
+{- | Delay a monadic computation. Any effects performed by the argument will only take effect
     the first time the result is 'force'd.
 -}
-cached :: MonadIO m => m a -> m (Cached m a)
-cached action = MkCached <$> newIORef (Left action)
+delay :: MonadIO m => m a -> m (Delay m a)
+delay action = MkDelay <$> newIORef (Left action)
 
-{- | Construct an immediately forced cached value. This can be passed to functions that expect
-    a cached value without the overhead of delaying the computation
+{- | Construct an immediately forced delayed value. This can be passed to functions that expect
+    a delayed value without the overhead of delaying the computation
 -}
-cachedValue :: MonadIO m => a -> m (Cached m a)
-cachedValue value = MkCached <$> newIORef (Right value)
+delayValue :: MonadIO m => a -> m (Delay m a)
+delayValue value = MkDelay <$> newIORef (Right value)
 
 {- | Force a delayed computation in Monad 'm'. Forcing will only re-evaluate the computation
     once and subsequent applications of 'force' will return the same value.
@@ -36,8 +36,8 @@ cachedValue value = MkCached <$> newIORef (Right value)
         b) the computation is morally pure and two racing computations will
            produce the same result
 -}
-force :: MonadIO m => Cached m a -> m a
-force (MkCached ref) =
+force :: MonadIO m => Delay m a -> m a
+force (MkDelay ref) =
     readIORef ref >>= \case
         Left action -> do
             result <- action

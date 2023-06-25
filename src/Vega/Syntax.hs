@@ -13,61 +13,65 @@ module Vega.Syntax (
     TypeM (..),
     TypeError (..),
     Loc,
-    getLoc
+    getLoc,
 ) where
 
 import Vega.Prelude
 
-import Vega.Cached (Cached)
-import Vega.Loc (Loc, HasLoc(..))
+import Vega.Config qualified as Config
+import Vega.DeBruijn (Index, Level, Variables)
+import Vega.Delay (Delay)
+import Vega.Loc (HasLoc (..), Loc)
 import Vega.Pretty qualified as Pretty
+
+import GHC.Show qualified as Show
 
 type Name = Text
 
 data Pass = Parsed | Typed
 
 data Expr (pass :: Pass)
-    = Var Loc Name
+    = Var Loc (XVar pass) Name
     | App Loc (Expr pass) (Expr pass)
     | Lambda Loc Name (Expr pass)
     | Sequence Loc [Statement pass]
     | Pi Loc (Maybe Name) (TypeExpr pass) (Expr pass)
     | TypeLit Loc
-    deriving (Show)
+
+type family XVar (pass :: Pass) where
+    XVar Parsed = ()
+    XVar Typed = Index
 
 data Statement (pass :: Pass)
     = Let Loc Name (Maybe (TypeExpr pass)) (Expr pass)
     | RunExpr (Expr pass)
-    deriving (Show)
 
 type TypeExpr = Expr
 
 data Decl pass
     = DeclVar Loc Name (TypeExpr pass) (Expr pass)
     | DeclFunction Loc Name (TypeExpr pass) [Name] (Expr pass)
-    deriving (Show)
 
 data Program pass = Program
     { declarations :: [Decl pass]
     }
-    deriving (Show)
 
 data Value
     = PiClosure (Maybe Name) Value (TypeExpr Typed) EvalEnv
     | LambdaClosure Name (TypeExpr Typed) EvalEnv
     | Type
-    | StuckVar Name
+    | StuckVar Name Level
     | StuckApp Value Value
 
 type TypeValue = Value
 
 data TypeEnv = TypeEnv
-    { varTypes :: Map Name TypeValue
+    { variables :: Map Name (TypeValue, Level)
     , evalEnv :: EvalEnv
     }
 
 newtype EvalEnv = EvalEnv
-    { varValues :: Map Name (Cached TypeM TypeValue)
+    { varValues :: Variables (Delay TypeM Value)
     }
 
 -- This needs to be defined here since TypeEnv depends on the type of the cached monad and Value
@@ -76,8 +80,10 @@ newtype TypeM a
     = MkTypeM (ExceptT TypeError IO a)
     deriving (Functor, Applicative, Monad, MonadIO)
 
+type UnificationContext = (TypeValue, TypeValue)
+
 data TypeError
-    = UnableToUnify Loc TypeValue TypeValue
+    = UnableToUnify Loc TypeValue TypeValue UnificationContext
     | ApplicationOfNonPi Loc TypeValue
     | UnableToInferLambda Loc
     | DefiningLambdaAsNonPi Loc TypeValue
@@ -111,16 +117,38 @@ instance Pretty.Pretty Value where
                 <> Pretty.operator "\\"
                 <> Pretty.identifier name
                 <> Pretty.literal " "
+                <> Pretty.operator "->"
+                <> Pretty.literal " "
                 <> Pretty.pretty body
                 <> Pretty.paren ")"
         Type -> Pretty.keyword "Type"
-        StuckVar name -> Pretty.identifier name
+        StuckVar name level ->
+            if Config.getPrintDeBruijn ()
+                then Pretty.identifier name <> Pretty.note ("$" <> show level)
+                else Pretty.identifier name
         StuckApp funValue argValue ->
             Pretty.paren "(" <> Pretty.pretty funValue <> Pretty.literal " " <> Pretty.pretty argValue <> Pretty.paren ")"
 
-instance Pretty.Pretty (Expr pass) where
+instance Show.Show Value where
+    show = let ?style = Pretty.Plain in toString . Pretty.pretty
+
+class PrettyXVar a where
+    prettyIndex
+        :: (?style :: style, Pretty.TextStyle style)
+        => Pretty.Doc style
+        -> a
+        -> Pretty.Doc style
+
+instance PrettyXVar () where prettyIndex doc () = doc
+instance PrettyXVar Index where
+    prettyIndex doc index =
+        if Config.getPrintDeBruijn ()
+            then doc <> Pretty.note ("@" <> show index)
+            else doc
+
+instance PrettyXVar (XVar pass) => Pretty.Pretty (Expr pass) where
     pretty = \case
-        Var _ name -> Pretty.identifier name
+        Var _ index name -> prettyIndex (Pretty.identifier name) index
         App _ funExpr argExpr ->
             Pretty.paren "("
                 <> Pretty.pretty funExpr
@@ -160,7 +188,7 @@ instance Pretty.Pretty (Expr pass) where
                 <> Pretty.pretty body
         TypeLit _ -> Pretty.keyword "Type"
 
-instance Pretty.Pretty (Statement pass) where
+instance (PrettyXVar (XVar pass)) => Pretty.Pretty (Statement pass) where
     pretty = \case
         Let _ name Nothing expr ->
             Pretty.keyword "let"
@@ -186,7 +214,7 @@ instance Pretty.Pretty (Statement pass) where
 
 instance HasLoc (Expr pass) where
     getLoc = \case
-        Var loc _ -> loc
+        Var loc _ _ -> loc
         App loc _ _ -> loc
         Lambda loc _ _ -> loc
         Sequence loc _ -> loc

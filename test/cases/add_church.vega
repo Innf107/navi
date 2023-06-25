@@ -1,0 +1,16 @@
+
+Nat : Type;
+Nat = (a : Type) -> (a -> a) -> a -> a;
+
+Z : Nat;
+Z = \a -> \s -> \z -> z;
+
+S : Nat -> Nat;
+S = \n -> \a -> \s -> \z -> s (n a s z);
+
+add : Nat -> Nat -> Nat;
+add n m = n Nat S m;
+
+
+result : Nat;
+result = add (S S Z) (S Z)

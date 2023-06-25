@@ -26,7 +26,7 @@ compileDecl (DeclFunction loc name _typeExpr (param : params) body) =
         <> " end"
 
 compileExpr :: Expr Typed -> Text
-compileExpr (Var _ name) = name
+compileExpr (Var _ _ name) = name
 compileExpr (App _ funExpr argExpr) = compileExpr funExpr <> "(" <> compileExpr argExpr <> ")"
 compileExpr (Lambda _ name body) = "(function (" <> name <> ") return " <> compileExpr body <> " end)"
 compileExpr Pi{} = "nil" -- 'Pi's should not stick around at runtime

@@ -25,7 +25,9 @@ source-repository head
 
 library
   exposed-modules:
-      Vega.Cached
+      Vega.Config
+      Vega.DeBruijn
+      Vega.Delay
       Vega.Error
       Vega.Lexer
       Vega.Loc
@@ -52,10 +54,13 @@ library
       DisambiguateRecordFields
       ViewPatterns
       NoFieldSelectors
+      DerivingStrategies
+      UndecidableInstances
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -Werror=missing-methods
   build-depends:
       array
     , base >=4.7 && <5
+    , containers
     , mtl
     , relude
     , text
@@ -80,10 +85,13 @@ executable vega
       DisambiguateRecordFields
       ViewPatterns
       NoFieldSelectors
+      DerivingStrategies
+      UndecidableInstances
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -Werror=missing-methods -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array
     , base >=4.7 && <5
+    , containers
     , mtl
     , relude
     , text
@@ -110,10 +118,13 @@ test-suite vega-test
       DisambiguateRecordFields
       ViewPatterns
       NoFieldSelectors
+      DerivingStrategies
+      UndecidableInstances
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -Wno-unticked-promoted-constructors -Wno-name-shadowing -Werror=incomplete-patterns -Werror=incomplete-uni-patterns -Werror=missing-methods -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       array
     , base >=4.7 && <5
+    , containers
     , mtl
     , relude
     , text
